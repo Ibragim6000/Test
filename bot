@@ -1,0 +1,117 @@
+import logging
+import os
+import datetime
+
+from aiogram import Bot, Dispatcher, types, executor
+from aiogram.utils import executor
+from aiogram.types import ParseMode, InlineKeyboardMarkup, InlineKeyboardButton
+from config import BOT_TOKEN
+
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+
+# Initialize bot and dispatcher
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot)
+
+
+# Start command handler
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    keyboard = InlineKeyboardMarkup()
+    post_button = InlineKeyboardButton('Выложить пост', callback_data='post')
+    support_button = InlineKeyboardButton('Поддержка', callback_data='support')
+    rules_button = InlineKeyboardButton('Правила', callback_data='rules')
+    keyboard.add(post_button, support_button, rules_button)
+    await message.answer("Добро пожаловать на Youtube биржу! Здесь вы можете опубликовать своё объявление 1 раз в день бесплатно, более 1 раза 1$ (80р)", reply_markup=keyboard)
+
+
+# Inline button handlers
+@dp.callback_query_handler(lambda c: c.data == 'post')
+async def process_callback_post(callback_query: types.CallbackQuery):
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(callback_query.from_user.id, "Прикрепите фото и текст поста. Принимается только 1 фото")
+
+
+@dp.callback_query_handler(lambda c: c.data == 'support')
+async def process_callback_support(callback_query: types.CallbackQuery):
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(callback_query.from_user.id, "Чтобы связаться с поддержкой пишите владельцу биржи - @ArturVoskresensky")
+
+
+
+@dp.callback_query_handler(lambda c: c.data == 'rules')
+async def process_callback_rules(callback_query: types.CallbackQuery):
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(callback_query.from_user.id, ("""⚡️ЧТО-БЫ ОПУБЛИКОВАТЬ ОБЬЯВЛЕНИЕ ПИШИТЕ: @t.me/YoutubeBirza_Bot
+
+⚡️ЗАЧЕМ НУЖНА ЭТА БИРЖА?
+
+- Тут можно найти воркера, который будет делать вам контент
+- Тут можно найти Дизайнера, который будет делать вам превью
+- Воркеру тут можно найти работу
+- Тут можно купить AdSense если у вас его нету
+- Тут можно купить Конечные заставки
+- Можно купить или продать канал
+
+⚡️ПРАВИЛА ПУБЛИКАЦИИ ПОСТОВ:
+
+- Указать свой контакт: @ArturVoskresensky
+- Бесплатный пост 1 раз в день
+- Обязательно добавить хештег:
+БЕСПЛАТНО:
+#конечка_куплю
+#канал_продаю
+#канал_куплю
+#адсенс_куплю
+#видео_куплю
+#видео_создаю
+
+⚡️ГАРАНТ:
+Писать: @ArturVoskresensky
+
+Услуги гаранта от админа - 5% от стоимости (от 1000 рублей)
+
+В последнее время участились ситуации мошенничества, поэтому мы придумали для вас услугу гаранта, это 3 проверенное лицо в вашей сделке у которого на балансе будут лежать деньги до выполнения всех условий."""))
+
+
+# Function to check if user has posted within the last 24 hours
+last_post = {}
+
+def check_last_post(user_id):
+    if user_id not in last_post:
+        # If the user hasn't posted before, return True to allow posting
+        return True
+    now = datetime.datetime.now()
+    last_post_date = last_post[user_id]
+    if (now - last_post_date).days >= 1:
+        # If the last post was more than 24 hours ago, return True to allow posting
+        return True
+    # If the last post was less than 24 hours ago, return False to disallow posting
+    return False
+
+
+# Message handler with photo and text
+@dp.message_handler(content_types=['photo', 'text'])
+async def handle_post(message: types.Message):
+    # Check if the user is allowed to post
+    if not check_last_post(message.from_user.id):
+        await message.answer("Вы уже выложили пост сегодня. Попробуйте еще раз через 24 часа.")
+        return
+
+    if message.caption is None:
+        caption = ''
+    else:
+        caption = message.caption
+
+    await message.answer("Объявление успешно размещено")
+    # Sending to specified channel
+    await bot.send_photo(chat_id='@kin9065', photo=message.photo[-1].file_id, caption=caption)
+
+    # Save the date and time of the user's last post
+    last_post[message.from_user.id] = datetime.datetime.now()
+
+
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
